@@ -2,11 +2,9 @@ BINARY_NAME = nightshell
 SRC_DIR = source
 BIN_DIR = bin
 INCLUDE_DIR = include
-CTYPES_LIB_DIR = ctypes_lib/bin
 
 CC = clang
-CFLAGS = -Wall -Wextra -Werror=implicit-function-declaration -Wpedantic -O3 -g -pipe -fno-fat-lto-objects -fPIC -mtune=native -march=native
-CC_SO_FLAGS = -Wall -Wextra -shared -fPIC -O2 -std=c11
+CFLAGS = -Wall -Wextra -Werror=implicit-function-declaration -Wpedantic -O3 -g -pipe -fno-fat-lto-objects -fPIC -std=c23
 LDFLAGS = -L$(BIN_DIR)
 
 INCLUDE_PATHS = -I$(INCLUDE_DIR)
@@ -14,7 +12,6 @@ INCLUDE_PATHS = -I$(INCLUDE_DIR)
 SRC_FILES = $(shell find $(SRC_DIR) -type f -name "*.c")
 OBJ_FILES = $(patsubst $(SRC_DIR)/%.c, $(BIN_DIR)/%.o, $(SRC_FILES))
 OBJ_SO_FILES = $(patsubst $(SRC_DIR)/%.c, $(CTYPES_LIB_DIR)/%.o, $(SRC_FILES))
-LIBRARY = $(CTYPES_LIB_DIR)/libnightshell.so
 
 SUDO		  	= sudo
 DEL_FILE      	= rm -f
@@ -45,17 +42,6 @@ install: $(BIN_DIR)/$(BINARY_NAME)
 
 remove:
 	$(SUDO) $(DEL_FILE) /usr/local/bin/$(BINARY_NAME)
-
-ctypes: $(LIBRARY)
-	@$(DEL_FILE) $(CTYPES_LIB_DIR)/*.o
-
-$(LIBRARY): $(OBJ_SO_FILES)
-	@mkdir -p $(CTYPES_LIB_DIR)
-	@$(CC) $(INCLUDE_PATHS) $(CC_SO_FLAGS) -o $@ $^
-
-$(CTYPES_LIB_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(dir $@)
-	@$(CC) $(INCLUDE_PATHS) $(CC_SO_FLAGS) -c -o $@ $<
 
 $(BIN_DIR)/$(BINARY_NAME): $(OBJ_FILES)
 	@echo "CC 		| $@"

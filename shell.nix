@@ -4,7 +4,6 @@ let
     boost
     cmake
     clang
-    make
     clang-tools
     clang-tidy-sarif
     clang-analyzer
