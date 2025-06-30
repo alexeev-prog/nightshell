@@ -9,6 +9,7 @@ let
     clang-analyzer
     gcc
     lld
+    readline
     pkg-config
     gdb
     valgrind
