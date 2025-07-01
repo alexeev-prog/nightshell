@@ -1,7 +1,7 @@
 #ifndef DEFAULT_H
 #define DEFAULT_H
 
-#define NULL nullptr
+// #define NULL nullptr
 
 #define ANSI_RESET "\033[0m"
 #define ANSI_BOLD "\033[1m"

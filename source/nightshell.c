@@ -1,16 +1,19 @@
 #include <stdio.h>
 #include <signal.h>
 #include <stdlib.h>
-
+#include <unistd.h>
+#include <locale.h>
 #include "cmdparser.h"
 #include "executor.h"
 #include "shell_input.h"
-#include "tasks_processing.h"
 #include "utils.h"
+#include "tasks_processing.h"
 #include "_default.h"
 
 #define VERSION "v0.1.0"
 #define null nullptr
+
+extern tasks tasks_structure;
 
 /**
  * @brief Signal handler for SIGINT during command execution
@@ -66,13 +69,15 @@ int process_commands(char* input) {
 }
 
 int main(int argc, char** argv) {
+    setlocale(LC_ALL, "C.UTF-8");
+
     int help_flag = 0;
     int version_flag = 0;
     int status = 1;
 
     struct CommandOption options[4] = {
-        {"Help info", "help", 'h', 0, null, &help_flag},
-        {"Version", "version", 'v', 0, null, &version_flag},
+        {"Help info", "help", 'h', 0, NULL, &help_flag},
+        {"Version", "version", 'v', 0, NULL, &version_flag},
     };
 
     struct CLIMetadata meta = {.prog_name = argv[0],
@@ -114,6 +119,9 @@ int main(int argc, char** argv) {
     }
 
     shell_input_init(&config);
+
+    signal(SIGINT, kill_foreground_task);
+	signal(SIGCHLD, mark_ended_task);
 
     do {
         char* input = shell_readline();

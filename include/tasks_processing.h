@@ -1,13 +1,16 @@
 #ifndef TASKS_PROCESSING_H
 #define TASKS_PROCESSING_H
 
-#include <pwd.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <wait.h>
 #include <string.h>
 #include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
-#include <wait.h>
+#include <signal.h>
+#include <pwd.h>
+#include <errno.h>
+#include "../include/colors.h"
 
 // Functions definitions
 int kill(pid_t pid, int);
@@ -22,10 +25,10 @@ int quit(void);
  * @param char* command Command of task
  **/
 struct background_task_t {
-    pid_t pid;
-    int is_finished;
-    char* timestamp;
-    char* command;
+	pid_t pid;
+	int is_finished;
+	char* timestamp;
+	char* command;
 };
 typedef struct background_task_t bg_task;
 
@@ -36,8 +39,8 @@ typedef struct background_task_t bg_task;
  * @param int is_finished Boolean value (is finished task)
  **/
 struct foreground_task_t {
-    pid_t pid;
-    int is_finished;
+	pid_t pid;
+	int is_finished;
 };
 typedef struct foreground_task_t fg_task;
 
@@ -50,10 +53,10 @@ typedef struct foreground_task_t fg_task;
  * @param size_t capacity Task Capacity
  **/
 struct tasks_t {
-    fg_task foreground_task;
-    bg_task* background_task;
-    size_t cursor;
-    size_t capacity;
+	fg_task foreground_task;
+	bg_task* background_task;
+	size_t cursor;
+	size_t capacity;
 };
 typedef struct tasks_t tasks;
 
@@ -65,4 +68,4 @@ int is_background_task(char** args);
 void mark_ended_task();
 int launch_task(char** args);
 
-#endif    // TASKS_PROCESSING_H
+#endif // TASKS_PROCESSING_H
