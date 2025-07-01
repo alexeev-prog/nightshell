@@ -14,6 +14,9 @@
 #include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <errno.h>
 
 #include "_default.h"
 
@@ -30,7 +33,7 @@ static const ShellPrompt kDefaultPrompt = {.format = DEFAULT_PROMPT_FORMAT,
                                            .user_color = ANSI_GREEN,
                                            .dir_color = ANSI_CYAN,
                                            .symbol_color = ANSI_BLUE ANSI_BOLD,
-                                           .symbol = NULL,    // Auto-detect based on UID
+                                           .symbol = NULL,
                                            .dynamic_dir = true};
 
 // Current configuration
@@ -47,6 +50,85 @@ static size_t registry_capacity = 0;
 // User and host info cache
 static char cached_username[MAX_USER_LENGTH] = "";
 static char cached_hostname[MAX_HOST_LENGTH] = "";
+
+// Command history
+static char* history[MAX_HISTORY];
+static int history_count = 0;
+static int history_index = 0;
+static int history_current = 0;
+
+// Signal handling
+static volatile sig_atomic_t interrupt_received = 0;
+
+/**
+ * @brief Signal handler for SIGINT
+ */
+static void sigint_handler(int sig) {
+    interrupt_received = 1;
+}
+
+/**
+ * @brief Load command history from file
+ */
+static void load_history(void) {
+    FILE* file = fopen(HISTORY_FILE, "r");
+    if (!file) return;
+
+    char line[MAX_INPUT_LENGTH];
+    while (fgets(line, sizeof(line), file)) {
+        size_t len = strlen(line);
+        if (len > 0 && line[len-1] == '\n') {
+            line[len-1] = '\0';
+        }
+        if (len > 1) {
+            history[history_count] = strdup(line);
+            if (history[history_count]) {
+                history_count++;
+                if (history_count >= MAX_HISTORY) break;
+            }
+        }
+    }
+    fclose(file);
+    history_current = history_count;
+    history_index = history_count;
+}
+
+/**
+ * @brief Save command history to file
+ */
+static void save_history(void) {
+    FILE* file = fopen(HISTORY_FILE, "w");
+    if (!file) return;
+
+    for (int i = 0; i < history_count; i++) {
+        fprintf(file, "%s\n", history[i]);
+    }
+    fclose(file);
+}
+
+/**
+ * @brief Add command to history
+ */
+static void add_to_history(const char* command) {
+    // Skip empty commands and duplicates
+    if (strlen(command) == 0) return;
+    if (history_count > 0 && strcmp(history[history_count-1], command) == 0) return;
+
+    if (history_count >= MAX_HISTORY) {
+        free(history[0]);
+        for (int i = 0; i < MAX_HISTORY-1; i++) {
+            history[i] = history[i+1];
+        }
+        history_count--;
+    }
+
+    history[history_count] = strdup(command);
+    if (history[history_count]) {
+        history_count++;
+    }
+    history_current = history_count;
+    history_index = history_count;
+}
 
 /**
  * @brief Get username with caching
@@ -148,12 +230,16 @@ void shell_input_init(const ShellConfig* config) {
     for (int i = 0; i < sizeof(commands) / sizeof(commands[0]); i++) {
         register_command(commands[i]);
     }
+
+    // Load command history
+    load_history();
 }
 
 /**
  * @brief Cleanup shell input resources
  */
 void shell_input_cleanup(void) {
+    // Free command registry
     for (size_t i = 0; i < command_count; i++) {
         free(command_registry[i]);
     }
@@ -161,6 +247,15 @@ void shell_input_cleanup(void) {
     command_registry = NULL;
     command_count = 0;
     registry_capacity = 0;
+
+    // Save and free history
+    save_history();
+    for (int i = 0; i < history_count; i++) {
+        free(history[i]);
+    }
+    history_count = 0;
+    history_index = 0;
+    history_current = 0;
 }
 
 /**
@@ -363,19 +458,15 @@ static void redraw_input(const char* input, size_t cursor_pos) {
 /**
  * @brief Handle escape sequence input
  */
-static void handle_escape_sequence(size_t* cursor_pos, size_t input_len) {
+static void handle_escape_sequence(char* input, size_t* input_len, size_t* cursor_pos) {
     char seq[2];
-    if (read(STDIN_FILENO, &seq[0], 1) <= 0) {
-        return;
-    }
-    if (read(STDIN_FILENO, &seq[1], 1) <= 0) {
-        return;
-    }
+    if (read(STDIN_FILENO, &seq[0], 1) <= 0) return;
+    if (read(STDIN_FILENO, &seq[1], 1) <= 0) return;
 
     if (seq[0] == '[') {
         switch (seq[1]) {
             case 'C':    // Right arrow
-                if (*cursor_pos < input_len) {
+                if (*cursor_pos < *input_len) {
                     (*cursor_pos)++;
                 }
                 break;
@@ -385,10 +476,25 @@ static void handle_escape_sequence(size_t* cursor_pos, size_t input_len) {
                 }
                 break;
             case 'A':    // Up arrow - History
-                // Placeholder for history implementation
+                if (history_index > 0) {
+                    history_index--;
+                    strncpy(input, history[history_index], MAX_INPUT_LENGTH);
+                    *input_len = strlen(input);
+                    *cursor_pos = *input_len;
+                }
                 break;
             case 'B':    // Down arrow - History
-                // Placeholder for history implementation
+                if (history_index < history_count - 1) {
+                    history_index++;
+                    strncpy(input, history[history_index], MAX_INPUT_LENGTH);
+                    *input_len = strlen(input);
+                    *cursor_pos = *input_len;
+                } else if (history_index == history_count - 1) {
+                    history_index++;
+                    input[0] = '\0';
+                    *input_len = 0;
+                    *cursor_pos = 0;
+                }
                 break;
             case 'Z':    // Shift+Tab
                 // Handle reverse tab if needed
@@ -402,7 +508,7 @@ static void handle_escape_sequence(size_t* cursor_pos, size_t input_len) {
 /**
  * @brief Handle tab completion
  */
-static void handle_tab_completion(const char* input,
+static void handle_tab_completion(char* input,
                                   size_t cursor_pos,
                                   size_t input_len,
                                   size_t* cursor_pos_ptr) {
@@ -453,6 +559,10 @@ static void handle_printable_char(char* input, size_t* input_len, size_t* cursor
  * @brief Read a line from user with advanced features
  */
 char* shell_readline(void) {
+    // Save original SIGINT handler
+    void (*original_sigint)(int) = signal(SIGINT, sigint_handler);
+    interrupt_received = 0;
+
     enable_raw_mode();
 
     char input[MAX_INPUT_LENGTH] = {0};
@@ -465,8 +575,21 @@ char* shell_readline(void) {
     while (true) {
         char ch;
         const ssize_t bytes_read = read(STDIN_FILENO, &ch, 1);
-        if (bytes_read <= 0) {
+
+        // Handle SIGINT
+        if (interrupt_received) {
+            input[0] = '\0';
+            input_len = 0;
+            cursor_pos = 0;
+            printf("^C\n");
+            redraw_input(input, cursor_pos);
+            interrupt_received = 0;
             continue;
+        }
+
+        if (bytes_read <= 0) {
+            if (errno == EINTR) continue;
+            break;
         }
 
         if (ch == '\t') {    // Tab completion
@@ -478,7 +601,7 @@ char* shell_readline(void) {
             printf("\n");
             break;
         } else if (ch == 27) {    // Escape sequence
-            handle_escape_sequence(&cursor_pos, input_len);
+            handle_escape_sequence(input, &input_len, &cursor_pos);
             redraw_input(input, cursor_pos);
         } else if (isprint(ch)) {    // Printable characters
             handle_printable_char(input, &input_len, &cursor_pos, ch);
@@ -487,5 +610,12 @@ char* shell_readline(void) {
     }
 
     disable_raw_mode();
+    signal(SIGINT, original_sigint);
+
+    // Save to history if not empty
+    if (strlen(input) > 0) {
+        add_to_history(input);
+    }
+
     return strdup(input);
 }

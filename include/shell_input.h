@@ -17,6 +17,14 @@
 #define MAX_HOST_LENGTH 64
 #define MAX_USER_LENGTH 32
 
+#define MAX_SUGGESTIONS 5
+#define MAX_USER_LENGTH 32
+#define MAX_HOST_LENGTH 64
+#define MAX_PROMPT_LENGTH 256
+#define MAX_INPUT_LENGTH 1024
+#define MAX_HISTORY 100
+#define HISTORY_FILE ".nightshell_history"
+
 // Terminal control sequences
 #define CLEAR_LINE "\033[2K"
 #define CURSOR_HOME "\r"

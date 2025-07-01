@@ -1,3 +1,9 @@
+commit cb3d70e27143482942a74145f5ae912ce5aa3196
+Author: Alexeev Bronislav <alexeev.dev@mail.ru>
+Date:   Tue Jul 1 07:05:58 2025 +0700
+
+    improve scripts, improve shell
+
 commit c25b16d65d86641d976ee5286fea889ca0574f01
 Author: Alexeev Bronislav <alexeev.dev@mail.ru>
 Date:   Tue Jul 1 05:18:07 2025 +0700

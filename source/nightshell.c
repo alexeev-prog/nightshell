@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <signal.h>
+#include <stdlib.h>
 
 #include "cmdparser.h"
 #include "executor.h"
@@ -9,6 +11,14 @@
 
 #define VERSION "v0.1.0"
 #define null nullptr
+
+/**
+ * @brief Signal handler for SIGINT during command execution
+ */
+static void handle_exec_sigint(int sig) {
+    // Simply interrupt the current foreground process
+    // Actual termination will be handled in tasks_processing
+}
 
 int process_commands(char* input) {
     int num_tokens;
@@ -40,7 +50,10 @@ int process_commands(char* input) {
         if (!next_operator || (next_operator && strcmp(next_operator, "&") == 0 && last_status == 0)
             || (next_operator && strcmp(next_operator, "|") == 0 && last_status != 0))
         {
+            // Set SIGINT handler for command execution
+            void (*original_sigint)(int) = signal(SIGINT, handle_exec_sigint);
             status = execute(args);
+            signal(SIGINT, original_sigint);
             last_status = status;
         }
 
@@ -58,8 +71,8 @@ int main(int argc, char** argv) {
     int status = 1;
 
     struct CommandOption options[4] = {
-        {"Help info", "help", 'h', 0, null, &help_flag},    // Help flag
-        {"Version", "version", 'v', 0, null, &version_flag},    // Help flag
+        {"Help info", "help", 'h', 0, null, &help_flag},
+        {"Version", "version", 'v', 0, null, &version_flag},
     };
 
     struct CLIMetadata meta = {.prog_name = argv[0],
@@ -79,7 +92,7 @@ int main(int argc, char** argv) {
                                      .user_color = ANSI_MAGENTA,
                                      .dir_color = ANSI_CYAN,
                                      .symbol_color = ANSI_GREEN,
-                                     .symbol = NULL,    // Auto-detect ($ or #)
+                                     .symbol = NULL,
                                      .dynamic_dir = true},
                           .max_suggestions = 5};
 

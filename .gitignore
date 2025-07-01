@@ -53,3 +53,4 @@ bin/
 .idea/
 .vscode/
 .python-version
+.nightshell_history

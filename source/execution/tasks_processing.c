@@ -25,11 +25,6 @@ extern int global_status_code;
 
 /**
  * Struct background task
- *
- * @param      pid_t  Task PID
- * @param      int    is_finished Boolean value (is finished task)
- * @param      char*  timestamp Timestamp of task starting
- * @param      char*  command Command of task
  */
 struct background_task_t {
     pid_t pid;
@@ -41,9 +36,6 @@ typedef struct background_task_t bg_task;
 
 /**
  * Struct foreground task
- *
- * @param      pid_t  Task PID
- * @param      int    is_finished Boolean value (is finished task)
  */
 struct foreground_task_t {
     pid_t pid;
@@ -53,11 +45,6 @@ typedef struct foreground_task_t fg_task;
 
 /**
  * Struct for all tasks
- *
- * @param      fg_task   foreground_task Foreground Task Struct
- * @param      bg_task*  background_task Background Task Struct pointer
- * @param      size_t    cursor Cursor
- * @param      size_t    capacity Task Capacity
  */
 struct tasks_t {
     fg_task foreground_task;
@@ -69,15 +56,12 @@ typedef struct tasks_t tasks;
 
 /**
  * tasks_structure
- @brief      global tasks structure variable
-*/
+ */
 tasks tasks_structure = {
     .foreground_task = {.pid = -1, .is_finished = 1}, .background_task = 0, .cursor = 0, .capacity = 0};
 
 /**
- * @brief      function for set foreground task in tasks_structure
- *
- * @param      pid   pid PID of process
+ * @brief Set foreground task
  */
 void set_foreground_task(pid_t pid) {
     tasks_structure.foreground_task.pid = pid;
@@ -85,13 +69,7 @@ void set_foreground_task(pid_t pid) {
 }
 
 /**
- * @brief      function for add new background task
- *
- * @param      pid   pid PID of process
- * @param      name  The name
- * @param      char*  name Name of task
- *
- * @return     int
+ * @brief Add new background task
  */
 int add_background_task(pid_t pid, char* name) {
     bg_task* bt;
@@ -125,26 +103,18 @@ int add_background_task(pid_t pid, char* name) {
 }
 
 /**
- * kill_foreground_task
-
- @brief      Function for kill foreground task
-*/
+ * @brief Kill foreground task
+ */
 void kill_foreground_task(void) {
     if (tasks_structure.foreground_task.pid != -1) {
         kill(tasks_structure.foreground_task.pid, SIGTERM);
         tasks_structure.foreground_task.is_finished = 1;
-
         printf("\n");
     }
 }
 
 /**
- * @brief      Terminate background task
- *
- * @param      args  The arguments
- * @param      char**  args Arguments of background task
- *
- * @return     int Result code
+ * @brief Terminate background task
  */
 int term_background_task(char** args) {
     char* idx_str;
@@ -157,7 +127,6 @@ int term_background_task(char** args) {
 
         while (*idx_str >= '0' && *idx_str <= '9') {
             proc_idx = (proc_idx * 10) + ((*idx_str) - '0');
-
             idx_str += 1;
         }
 
@@ -172,12 +141,7 @@ int term_background_task(char** args) {
 }
 
 /**
- * @brief      function for check is background task
- *
- * @param      args  The arguments
- * @param      char**  args Argument for task
- *
- * @return     int (bool) 1 if true, 0 is false
+ * @brief Check if task is background
  */
 int is_background_task(char** args) {
     int last_arg_id = 0;
@@ -188,7 +152,6 @@ int is_background_task(char** args) {
 
     if (strcmp(args[last_arg_id], "&") == 0) {
         args[last_arg_id] = NULL;
-
         return 1;
     }
 
@@ -196,12 +159,7 @@ int is_background_task(char** args) {
 }
 
 /**
- * @brief      function for create and launch task
- *
- * @param      args  The arguments
- * @param      char**  args Arguments array
- *
- * @return     status code
+ * @brief Create and launch task
  */
 int launch_task(char** args) {
     pid_t pid;
@@ -212,6 +170,9 @@ int launch_task(char** args) {
     if (pid < 0) {
         log_error("Couldn't create child process (pid: %d)\n", (int)pid);
     } else if (pid == 0) {
+        // Child process
+        signal(SIGINT, SIG_DFL);  // Reset to default handler
+
         if (execvp(args[0], args) != 0) {
             log_error("Couldn't execute unknown command: %s", args[0]);
         }
@@ -225,10 +186,19 @@ int launch_task(char** args) {
         } else {
             set_foreground_task(pid);
 
-            if (waitpid(pid, NULL, 0) == -1) {
+            int child_status;
+            if (waitpid(pid, &child_status, 0) == -1) {
                 if (errno != EINTR) {
                     print_message("Couldn't track the completion of the process", WARNING);
                     global_status_code = -1;
+                }
+            }
+
+            // Check if child was terminated by signal
+            if (WIFSIGNALED(child_status)) {
+                int term_sig = WTERMSIG(child_status);
+                if (term_sig == SIGINT) {
+                    printf("\n");
                 }
             }
         }
@@ -238,25 +208,25 @@ int launch_task(char** args) {
 }
 
 /**
- * @brief      Function for marking ended tasks
+ * @brief Mark ended tasks
  */
 void mark_ended_task(void) {
     bg_task* bt;
 
-    pid_t pid = waitpid(-1, NULL, 0);
+    pid_t pid;
+    int status;
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        if (pid == tasks_structure.foreground_task.pid) {
+            tasks_structure.foreground_task.is_finished = 1;
+        } else {
+            for (size_t i = 0; i < tasks_structure.cursor; i++) {
+                bt = &tasks_structure.background_task[i];
 
-    if (pid == tasks_structure.foreground_task.pid) {
-        tasks_structure.foreground_task.is_finished = 1;
-    } else {
-        for (size_t i = 0; i < tasks_structure.cursor; i++) {
-            bt = &tasks_structure.background_task[i];
-
-            if (bt->pid == pid) {
-                printf("Task %zu is finished\n", i);
-
-                bt->is_finished = 1;
-
-                break;
+                if (bt->pid == pid) {
+                    printf("Task %zu is finished\n", i);
+                    bt->is_finished = 1;
+                    break;
+                }
             }
         }
     }

@@ -1,17 +1,13 @@
 #ifndef TASKS_PROCESSING_H
 #define TASKS_PROCESSING_H
 
-#include <errno.h>
 #include <pwd.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
 #include <wait.h>
-
-#include "../include/colors.h"
 
 // Functions definitions
 int kill(pid_t pid, int);
