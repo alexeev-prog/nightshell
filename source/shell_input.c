@@ -3,37 +3,35 @@
  * @brief Implementation of advanced shell input system
  */
 #include "shell_input.h"
+
+#include <ctype.h>
+#include <dirent.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
-#include <sys/ioctl.h>
-#include <dirent.h>
-#include <pwd.h>
-#include <sys/types.h>
+
 #include "_default.h"
 
 // Default color scheme
-static const ShellColors kDefaultColors = {
-    .command = ANSI_GREEN,
-    .error = ANSI_RED,
-    .argument = ANSI_CYAN,
-    .prompt = ANSI_BLUE ANSI_BOLD,
-    .suggestion = ANSI_YELLOW,
-    .reset = ANSI_RESET
-};
+static const ShellColors kDefaultColors = {.command = ANSI_GREEN,
+                                           .error = ANSI_RED,
+                                           .argument = ANSI_CYAN,
+                                           .prompt = ANSI_BLUE ANSI_BOLD,
+                                           .suggestion = ANSI_YELLOW,
+                                           .reset = ANSI_RESET};
 
 // Default prompt configuration
-static const ShellPrompt kDefaultPrompt = {
-    .format = DEFAULT_PROMPT_FORMAT,
-    .user_color = ANSI_GREEN,
-    .dir_color = ANSI_CYAN,
-    .symbol_color = ANSI_BLUE ANSI_BOLD,
-    .symbol = NULL,  // Auto-detect based on UID
-    .dynamic_dir = true
-};
+static const ShellPrompt kDefaultPrompt = {.format = DEFAULT_PROMPT_FORMAT,
+                                           .user_color = ANSI_GREEN,
+                                           .dir_color = ANSI_CYAN,
+                                           .symbol_color = ANSI_BLUE ANSI_BOLD,
+                                           .symbol = NULL,    // Auto-detect based on UID
+                                           .dynamic_dir = true};
 
 // Current configuration
 static ShellConfig current_config;
@@ -89,7 +87,9 @@ static size_t visible_length(const char* str) {
         }
 
         if (in_escape) {
-            if (*p == 'm') in_escape = 0;
+            if (*p == 'm') {
+                in_escape = 0;
+            }
             continue;
         }
 
@@ -139,11 +139,15 @@ void shell_input_init(const ShellConfig* config) {
     }
     command_count = 0;
 
+    char* commands[] = {"help",        "cd",     "exit", "clear",   "term",        "bg",
+                        "cd",          "quit",   "sgls", "sglsblk", "environment", "echon",
+                        "environment", "sghint", "gapf", "pwd",     "fasfetch",    "neofetch",
+                        "cat",         "mkdir",  "curl", "wget",    "ls",          "touch"};
+
     // Register default commands
-    register_command("help");
-    register_command("version");
-    register_command("exit");
-    register_command("clear");
+    for (int i = 0; i < sizeof(commands) / sizeof(commands[0]); i++) {
+        register_command(commands[i]);
+    }
 }
 
 /**
@@ -218,27 +222,27 @@ static const char* generate_prompt(void) {
             const char* value = "";
 
             switch (*src) {
-                case 'u': // Username
+                case 'u':    // Username
                     color_code = current_config.prompt.user_color;
                     value = username;
                     break;
-                case 'd': // Directory (last part)
+                case 'd':    // Directory (last part)
                     color_code = current_config.prompt.dir_color;
                     value = strrchr(cwd, '/');
                     value = value ? value + 1 : cwd;
                     break;
-                case 'w': // Full working directory
+                case 'w':    // Full working directory
                     color_code = current_config.prompt.dir_color;
                     value = cwd;
                     break;
-                case 's': // Prompt symbol
+                case 's':    // Prompt symbol
                     color_code = current_config.prompt.symbol_color;
                     value = symbol;
                     break;
-                case '%': // Literal %
+                case '%':    // Literal %
                     value = "%";
                     break;
-                default: // Unknown specifier
+                default:    // Unknown specifier
                     src--;
                     value = "%";
                     break;
@@ -271,7 +275,9 @@ static const char* generate_prompt(void) {
                 remaining -= reset_len;
             }
 
-            if (*src) src++;
+            if (*src) {
+                src++;
+            }
         } else {
             *dest++ = *src++;
             remaining--;
@@ -334,7 +340,7 @@ static void redraw_input(const char* input, size_t cursor_pos) {
         // Tokenize input for highlighting
         char buffer[MAX_INPUT_LENGTH];
         strncpy(buffer, input, sizeof(buffer));
-        buffer[sizeof(buffer)-1] = '\0';
+        buffer[sizeof(buffer) - 1] = '\0';
 
         char* token = strtok(buffer, " ");
         if (token) {
@@ -350,7 +356,7 @@ static void redraw_input(const char* input, size_t cursor_pos) {
 
     // Position cursor correctly
     const size_t total_pos = prompt_len + cursor_pos;
-    printf("\033[%zuG", total_pos + 1); // +1 because terminal columns are 1-based
+    printf("\033[%zuG", total_pos + 1);    // +1 because terminal columns are 1-based
     fflush(stdout);
 }
 
@@ -359,24 +365,32 @@ static void redraw_input(const char* input, size_t cursor_pos) {
  */
 static void handle_escape_sequence(size_t* cursor_pos, size_t input_len) {
     char seq[2];
-    if (read(STDIN_FILENO, &seq[0], 1) <= 0) return;
-    if (read(STDIN_FILENO, &seq[1], 1) <= 0) return;
+    if (read(STDIN_FILENO, &seq[0], 1) <= 0) {
+        return;
+    }
+    if (read(STDIN_FILENO, &seq[1], 1) <= 0) {
+        return;
+    }
 
     if (seq[0] == '[') {
         switch (seq[1]) {
-            case 'C':  // Right arrow
-                if (*cursor_pos < input_len) (*cursor_pos)++;
+            case 'C':    // Right arrow
+                if (*cursor_pos < input_len) {
+                    (*cursor_pos)++;
+                }
                 break;
-            case 'D':  // Left arrow
-                if (*cursor_pos > 0) (*cursor_pos)--;
+            case 'D':    // Left arrow
+                if (*cursor_pos > 0) {
+                    (*cursor_pos)--;
+                }
                 break;
-            case 'A':  // Up arrow - History
+            case 'A':    // Up arrow - History
                 // Placeholder for history implementation
                 break;
-            case 'B':  // Down arrow - History
+            case 'B':    // Down arrow - History
                 // Placeholder for history implementation
                 break;
-            case 'Z':  // Shift+Tab
+            case 'Z':    // Shift+Tab
                 // Handle reverse tab if needed
                 break;
             default:
@@ -388,16 +402,20 @@ static void handle_escape_sequence(size_t* cursor_pos, size_t input_len) {
 /**
  * @brief Handle tab completion
  */
-static void handle_tab_completion(const char* input, size_t cursor_pos,
-                                 size_t input_len, size_t* cursor_pos_ptr) {
+static void handle_tab_completion(const char* input,
+                                  size_t cursor_pos,
+                                  size_t input_len,
+                                  size_t* cursor_pos_ptr) {
     // Find current word
     size_t word_start = cursor_pos;
-    while (word_start > 0 && !isspace(input[word_start-1])) {
+    while (word_start > 0 && !isspace(input[word_start - 1])) {
         word_start--;
     }
 
     const size_t word_len = cursor_pos - word_start;
-    if (word_len == 0) return;
+    if (word_len == 0) {
+        return;
+    }
 
     char prefix[MAX_CMD_NAME_LENGTH];
     const size_t copy_len = word_len < sizeof(prefix) ? word_len : sizeof(prefix) - 1;
@@ -447,20 +465,22 @@ char* shell_readline(void) {
     while (true) {
         char ch;
         const ssize_t bytes_read = read(STDIN_FILENO, &ch, 1);
-        if (bytes_read <= 0) continue;
+        if (bytes_read <= 0) {
+            continue;
+        }
 
-        if (ch == '\t') {  // Tab completion
+        if (ch == '\t') {    // Tab completion
             handle_tab_completion(input, cursor_pos, input_len, &cursor_pos);
-        } else if (ch == 127 || ch == '\b') {  // Backspace
+        } else if (ch == 127 || ch == '\b') {    // Backspace
             handle_backspace(input, &input_len, &cursor_pos);
             redraw_input(input, cursor_pos);
-        } else if (ch == '\n') {  // Enter
+        } else if (ch == '\n') {    // Enter
             printf("\n");
             break;
-        } else if (ch == 27) {  // Escape sequence
+        } else if (ch == 27) {    // Escape sequence
             handle_escape_sequence(&cursor_pos, input_len);
             redraw_input(input, cursor_pos);
-        } else if (isprint(ch)) {  // Printable characters
+        } else if (isprint(ch)) {    // Printable characters
             handle_printable_char(input, &input_len, &cursor_pos, ch);
             redraw_input(input, cursor_pos);
         }

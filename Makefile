@@ -4,7 +4,7 @@ BIN_DIR = bin
 INCLUDE_DIR = include
 
 CC = clang
-CFLAGS = -Wall -Wextra -Werror=implicit-function-declaration -Wpedantic -O3 -g -pipe -fno-fat-lto-objects -fPIC -std=c23
+CFLAGS = -Wall -Wextra -Werror=implicit-function-declaration -Wpedantic -O3 -g -pipe -fno-fat-lto-objects -fPIC -std=c23 -lreadline
 LDFLAGS = -L$(BIN_DIR)
 
 INCLUDE_PATHS = -I$(INCLUDE_DIR)

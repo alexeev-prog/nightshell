@@ -635,6 +635,11 @@ def main() -> None:
                     })
                 finally:
                     progress.update(1)
+
+        try:
+            os.remove(f'{futures[future]}.fixes.yaml')
+        except:
+            pass
     
     # Generate report
     console.rule("[bold blue]Processing Report[/]")

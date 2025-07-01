@@ -1,49 +1,87 @@
-#include "cmdparser.h"
-#include "shell_input.h"
 #include <stdio.h>
+
+#include "cmdparser.h"
+#include "executor.h"
+#include "shell_input.h"
+#include "tasks_processing.h"
+#include "utils.h"
 #include "_default.h"
 
 #define VERSION "v0.1.0"
 #define null nullptr
 
-int main(int argc, char **argv) {
+int process_commands(char* input) {
+    int num_tokens;
+    char** tokens = split_by_delims(input, "&|;", &num_tokens);
+    int status = 0;
+    int last_status = 0;
+    char* next_operator = NULL;
+
+    for (int i = 0; i < num_tokens; i++) {
+        if (strlen(tokens[i]) == 0) {
+            continue;
+        }
+
+        // Обработка операторов
+        if (strcmp(tokens[i], "&") == 0) {
+            next_operator = "&";
+            continue;
+        } else if (strcmp(tokens[i], "|") == 0) {
+            next_operator = "|";
+            continue;
+        } else if (strcmp(tokens[i], ";") == 0) {
+            next_operator = NULL;
+            continue;
+        }
+
+        int arg_count;
+        char** args = split_into_tokens(tokens[i], &arg_count);
+
+        if (!next_operator || (next_operator && strcmp(next_operator, "&") == 0 && last_status == 0)
+            || (next_operator && strcmp(next_operator, "|") == 0 && last_status != 0))
+        {
+            status = execute(args);
+            last_status = status;
+        }
+
+        free_tokens(args, arg_count);
+        next_operator = NULL;
+    }
+
+    free_tokens(tokens, num_tokens);
+    return status;
+}
+
+int main(int argc, char** argv) {
     int help_flag = 0;
     int version_flag = 0;
+    int status = 1;
 
     struct CommandOption options[4] = {
-        {"Help info", "help",    'h', 0, null, &help_flag},     // Help flag
-        {"Version", "version",    'v', 0, null, &version_flag},     // Help flag
+        {"Help info", "help", 'h', 0, null, &help_flag},    // Help flag
+        {"Version", "version", 'v', 0, null, &version_flag},    // Help flag
     };
 
-    struct CLIMetadata meta = {
-        .prog_name = argv[0],
-        .description = "",
-        .usage_args = "[ARGUMENTS...]",
-        .options = options,
-        .options_count = sizeof(options) / sizeof(options[0])
-    };
+    struct CLIMetadata meta = {.prog_name = argv[0],
+                               .description = "",
+                               .usage_args = "[ARGUMENTS...]",
+                               .options = options,
+                               .options_count = sizeof(options) / sizeof(options[0])};
 
-    ShellConfig config = {
-        .colors = {
-            .command = ANSI_GREEN,
-            .error = ANSI_RED,
-            .argument = ANSI_CYAN,
-            .prompt = ANSI_BLUE,
-            .suggestion = ANSI_YELLOW,
-            .reset = ANSI_RESET
-        },
-        .prompt = {
-            .format = ANSI_MAGENTA "[%u" ANSI_RESET "@"
-                         ANSI_CYAN "%w" ANSI_RESET "]"
-                         ANSI_GREEN "%s " ANSI_RESET,
-            .user_color = ANSI_MAGENTA,
-            .dir_color = ANSI_CYAN,
-            .symbol_color = ANSI_GREEN,
-            .symbol = NULL, // Auto-detect ($ or #)
-            .dynamic_dir = true
-        },
-        .max_suggestions = 5
-    };
+    ShellConfig config = {.colors = {.command = ANSI_GREEN,
+                                     .error = ANSI_RED,
+                                     .argument = ANSI_CYAN,
+                                     .prompt = ANSI_BLUE,
+                                     .suggestion = ANSI_YELLOW,
+                                     .reset = ANSI_RESET},
+                          .prompt = {.format = ANSI_MAGENTA "[%u" ANSI_RESET "@" ANSI_CYAN "%w" ANSI_RESET
+                                                            "]" ANSI_GREEN "%s " ANSI_RESET,
+                                     .user_color = ANSI_MAGENTA,
+                                     .dir_color = ANSI_CYAN,
+                                     .symbol_color = ANSI_GREEN,
+                                     .symbol = NULL,    // Auto-detect ($ or #)
+                                     .dynamic_dir = true},
+                          .max_suggestions = 5};
 
     int pos_index = parse_options(argc, argv, meta.options, meta.options_count);
 
@@ -64,14 +102,14 @@ int main(int argc, char **argv) {
 
     shell_input_init(&config);
 
-    while (true) {
+    do {
         char* input = shell_readline();
-        if (!input) break;
-
-        printf("You entered: %s\n", input);
-
+        if (!input) {
+            break;
+        }
+        status = process_commands(input);
         free(input);
-    }
+    } while (status == 1);
 
     shell_input_cleanup();
 

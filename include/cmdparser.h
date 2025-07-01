@@ -38,10 +38,10 @@ struct CommandOption {
  *
  **/
 struct CLIMetadata {
-    const char *prog_name;
-    const char *description;
-    const char *usage_args;
-    struct CommandOption *options;
+    const char* prog_name;
+    const char* description;
+    const char* usage_args;
+    struct CommandOption* options;
     size_t options_count;
 };
 
